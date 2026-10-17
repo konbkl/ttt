@@ -9,7 +9,7 @@ from pyrogram.errors import (
     UserNotParticipant,
     PeerIdInvalid
 )
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, User
 
 from SHIVMUSIC import YouTube, app
 from SHIVMUSIC.misc import SUDOERS
@@ -34,7 +34,12 @@ def PlayWrapper(command):
     async def wrapper(client, message):
         language = await get_lang(message.chat.id)
         _ = get_string(language)
-        if message.sender_chat:
+        # Anonymous admin (group ke naam se message) -> admin maan ke play karne do
+        if message.sender_chat and message.sender_chat.id == message.chat.id:
+            message.from_user = User(id=message.chat.id, first_name="ᴀɴσηʏᴍσᴜs ᴀᴅᴍɪη",
+                                     is_bot=False, client=client)
+            message._anon_admin = True
+        if message.sender_chat and not getattr(message, "_anon_admin", False):
             upl = InlineKeyboardMarkup(
                 [
                     [
@@ -95,7 +100,7 @@ def PlayWrapper(command):
             channel = None
         playmode = await get_playmode(message.chat.id)
         playty = await get_playtype(message.chat.id)
-        if playty != "Everyone":
+        if playty != "Everyone" and not getattr(message, "_anon_admin", False):
             if message.from_user.id not in SUDOERS:
                 admins = adminlist.get(message.chat.id)
                 if not admins:
@@ -159,7 +164,6 @@ def PlayWrapper(command):
                     )
                 myu = await message.reply_text(_["call_4"].format(app.mention))
                 try:
-                    await asyncio.sleep(1)
                     await userbot.join_chat(invitelink)
                 except InviteRequestSent:
                     try:
@@ -168,7 +172,7 @@ def PlayWrapper(command):
                         return await message.reply_text(
                             _["call_3"].format(app.mention, type(e).__name__)
                         )
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(1)
                     await myu.edit(_["call_5"].format(app.mention))
                 except UserAlreadyParticipant:
                     pass
@@ -204,7 +208,12 @@ def CPlayWrapper(command):
         i = await client.get_me()
         language = await get_lang(message.chat.id)
         _ = get_string(language)
-        if message.sender_chat:
+        # Anonymous admin (group ke naam se message) -> admin maan ke play karne do
+        if message.sender_chat and message.sender_chat.id == message.chat.id:
+            message.from_user = User(id=message.chat.id, first_name="ᴀɴσηʏᴍσᴜs ᴀᴅᴍɪη",
+                                     is_bot=False, client=client)
+            message._anon_admin = True
+        if message.sender_chat and not getattr(message, "_anon_admin", False):
             upl = InlineKeyboardMarkup(
                 [
                     [
@@ -265,7 +274,7 @@ def CPlayWrapper(command):
             channel = None
         playmode = await get_playmode(message.chat.id)
         playty = await get_playtype(message.chat.id)
-        if playty != "Everyone":
+        if playty != "Everyone" and not getattr(message, "_anon_admin", False):
             if message.from_user.id not in SUDOERS:
                 admins = adminlist.get(message.chat.id)
                 if not admins:
@@ -347,7 +356,6 @@ def CPlayWrapper(command):
                     )
                 myu = await message.reply_text(_["call_4"].format(i.mention))
                 try:
-                    await asyncio.sleep(1)
                     await userbot.join_chat(invitelink)
                 except InviteRequestSent:
                     try:
@@ -356,7 +364,7 @@ def CPlayWrapper(command):
                         return await message.reply_text(
                             _["call_3"].format(i.mention, type(e).__name__)
                         )
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(1)
                     await myu.edit(_["call_5"].format(i.mention))
                 except UserAlreadyParticipant:
                     pass
@@ -385,3 +393,4 @@ def CPlayWrapper(command):
         )
 
     return wrapper
+                

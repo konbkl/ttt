@@ -93,8 +93,11 @@ def _now(chat_id):
     return 0, "00:00"
 
 
+CLONE_BOT_LINK = "https://t.me/SizzuMusicBot?start=clone"
+
+
 def repo_url():
-    return getattr(config, "REPO_URL", None) or config.SUPPORT_CHANNEL
+    return CLONE_BOT_LINK
 
 
 def player_markup(_=None, chat_id=0, played=None, dur=None, **__):
@@ -115,7 +118,7 @@ def player_markup(_=None, chat_id=0, played=None, dur=None, **__):
     ])
     rows.append([
         btn(f"-{SEEK_STEP}ˢ", cb=f"ADMIN SeekBack|{chat_id}", font=False),
-        btn("Repo", url=repo_url()),
+        btn("Clone", url=repo_url()),
         btn(f"{SEEK_STEP}ˢ+", cb=f"ADMIN SeekForward|{chat_id}", font=False),
     ])
     state = "Enabled" if _autoplay_state(chat_id) else "Disabled"

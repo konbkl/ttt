@@ -35,14 +35,14 @@ from py_yt import VideosSearch
 # =========================================================
 # CONFIG
 # =========================================================
-_HISTORY_LIMIT = 80          # remembered video ids per chat
-_TITLE_HISTORY_LIMIT = 40    # remembered normalized titles per chat
+_HISTORY_LIMIT = 300         # remembered video ids per chat (no repeats)
+_TITLE_HISTORY_LIMIT = 150   # remembered normalized titles per chat
 _ANCHOR_LIMIT = 4            # how many human-picked songs shape the vibe
 _POOL_TTL = 20 * 60          # seconds a cached pool stays fresh
 _POOL_SIZE = 12
 _MIN_SECONDS = 60
 _MAX_SECONDS = 12 * 60       # single songs only, no jukeboxes
-_TOP_PICK = 4                # choose among the best N candidates
+_TOP_PICK = 3                # choose among the best N candidates
 
 AUTOPLAY_MARK = "ᴀᴜᴛᴏᴘʟᴀʏ"   # appears in queue item "by" for autoplay tracks
 
@@ -66,21 +66,21 @@ _NOISE_WORDS = {
 _LANGS = {
     "punjabi": (r"\b(punjabi|panjabi|sidhu|moose ?wala|diljit|ap dhillon|karan aujla|"
                 r"amrit maan|babbu maan|gurdas|jass manak|sharry mann|ammy virk|"
-                r"shubh|gippy|b praak|kaka|harnoor|jazzy b|hardy sandhu)\b", r"[\u0A00-\u0A7F]"),
+                r"shubh|gippy|b praak|kaka|harnoor|jazzy b|hardy sandhu)\b", r"[਀-੿]"),
     "haryanvi": (r"\b(haryanvi|masoom sharma|renuka panwar|sapna choudhary|raju punjabi|"
                  r"ajay hooda|pranjal dahiya|diler kharkiya)\b", None),
     "bhojpuri": (r"\b(bhojpuri|pawan singh|khesari|neelkamal|dinesh lal|nirahua|"
                  r"shilpi raj|samar singh|arvind akela)\b", None),
     "rajasthani": (r"\b(rajasthani|marwadi|ghoomar|gori nagori)\b", None),
-    "tamil": (r"\b(tamil|anirudh|yuvan)\b", r"[\u0B80-\u0BFF]"),
-    "telugu": (r"\b(telugu|devi sri prasad|dsp|thaman|pushpa)\b", r"[\u0C00-\u0C7F]"),
-    "malayalam": (r"\b(malayalam|mollywood)\b", r"[\u0D00-\u0D7F]"),
-    "kannada": (r"\b(kannada|sandalwood)\b", r"[\u0C80-\u0CFF]"),
-    "bengali": (r"\b(bengali|bangla)\b", r"[\u0980-\u09FF]"),
+    "tamil": (r"\b(tamil|anirudh|yuvan)\b", r"[஀-௿]"),
+    "telugu": (r"\b(telugu|devi sri prasad|dsp|thaman|pushpa)\b", r"[ఀ-౿]"),
+    "malayalam": (r"\b(malayalam|mollywood)\b", r"[ഀ-ൿ]"),
+    "kannada": (r"\b(kannada|sandalwood)\b", r"[ಀ-೿]"),
+    "bengali": (r"\b(bengali|bangla)\b", r"[ঀ-৿]"),
     "marathi": (r"\b(marathi|ajay atul)\b", None),
-    "gujarati": (r"\b(gujarati|garba)\b", r"[\u0A80-\u0AFF]"),
-    "arabic": (r"\b(arabic|khaleeji|nasheed|nashid)\b", r"[\u0600-\u06FF]"),
-    "korean": (r"\b(k-?pop|korean|bts|blackpink|stray kids)\b", r"[\uAC00-\uD7AF]"),
+    "gujarati": (r"\b(gujarati|garba)\b", r"[઀-૿]"),
+    "arabic": (r"\b(arabic|khaleeji|nasheed|nashid)\b", r"[؀-ۿ]"),
+    "korean": (r"\b(k-?pop|korean|bts|blackpink|stray kids)\b", r"[가-힯]"),
     "english": (r"\b(english|taylor swift|ed sheeran|the weeknd|billie eilish|dua lipa|"
                 r"justin bieber|imagine dragons|coldplay|post malone|eminem|drake|"
                 r"bruno mars|ariana grande|maroon 5|adele|selena gomez)\b", None),
@@ -88,7 +88,7 @@ _LANGS = {
               r"neha kakkar|badshah|honey singh|darshan raval|armaan malik|"
               r"kumar sanu|udit narayan|alka yagnik|kishore kumar|lata|rafi|mohit chauhan|"
               r"vishal mishra|tulsi kumar|palak muchhal|guru randhawa|"
-              r"raftaar|divine|emiway)\b", r"[\u0900-\u097F]"),
+              r"raftaar|divine|emiway)\b", r"[ऀ-ॿ]"),
 }
 
 # Languages that sit close together (a Hindi song after a Punjabi one is fine,
@@ -233,7 +233,7 @@ def _blend(profiles: list) -> dict:
     langs, tag_w, tok_w = {}, {}, {}
     energy, total_w = 0.0, 0.0
     for i, p in enumerate(profiles):
-        w = 1.0 + 0.6 * i  # newer picks matter more
+        w = 1.0 + 1.5 * i  # newest request matters most
         total_w += w
         if p["lang"]:
             langs[p["lang"]] = langs.get(p["lang"], 0) + w
@@ -355,7 +355,7 @@ def _lang_relation(cand_lang: str, vibe: dict) -> float:
 
 def score_candidate(cand: dict, vibe: dict, chat_id: int = 0,
                     anchor_seconds: int = 0) -> Optional[float]:
-    """Vibe score, or None when the candidate must be rejected."""
+    """Vibe score, or None when the candidate must be rejected (STRICT)."""
     title = cand.get("title") or ""
     sec = cand.get("duration_sec", 0)
 
@@ -368,51 +368,54 @@ def score_candidate(cand: dict, vibe: dict, chat_id: int = 0,
         return None
 
     p = analyze(title, cand.get("channel", ""))
-    has_vibe = bool(vibe.get("total_w"))
-    score = 0.0
-
-    # ---- language (biggest signal) ----
-    if vibe.get("lang") and p["lang"]:
-        score += _lang_relation(p["lang"], vibe)
-    elif vibe.get("lang"):
-        score += 0.3  # unknown language: benefit of the doubt
-
-    # ---- mood tags ----
     vt, ct = vibe.get("tags", set()), p["tags"]
-    score += 1.6 * len(vt & ct)
-    if has_vibe:
+
+    # ---- hard rules: never jump to another language or another "version" ----
+    if vibe.get("lang") and p["lang"] and p["lang"] != vibe["lang"] \
+            and p["lang"] not in (vibe.get("langs") or {}):
+        return None                      # Hindi chat -> no Bhojpuri / English / Punjabi jump
+    for t in ("phonk", "slowed", "remix", "lofi"):
+        if t in ct and t not in vt:
+            return None                  # normal song chat -> no phonk / slowed / remix
+    if vibe.get("total_w"):
         for t in _STRICT_TAGS:
             if t in ct and t not in vt:
-                score -= 3.5   # candidate is devotional/ghazal/rap/... but vibe isn't
-            elif t in vt and t not in ct:
-                score -= 1.0   # can't tell: mild penalty only
-        for t in ("remix", "slowed", "lofi", "phonk"):
-            if t in ct and t not in vt and vt:
-                score -= 1.2
+                return None              # no bhajan / ghazal / rap out of nowhere
 
-    # ---- energy closeness ----
+    score = 0.0
+    if vibe.get("lang") and p["lang"] == vibe["lang"]:
+        score += 4.0
+    elif vibe.get("lang"):
+        score += 0.5                     # language not detectable from title
+
+    score += 1.6 * len(vt & ct)
+    for t in ("remix", "slowed", "lofi", "phonk"):
+        if t in vt and t not in ct:
+            score -= 1.0
+
     score -= 0.9 * abs(p["energy"] - vibe.get("energy", 0.0))
 
-    # ---- artist / film / keyword overlap ----
     tok_w = vibe.get("tokens") or {}
     total_w = vibe.get("total_w") or 1.0
     overlap = sum(tok_w[t] / total_w for t in p["tokens"] if t in tok_w)
     score += min(overlap, 2.0) * 1.8
 
-    # ---- duration closeness ----
     if anchor_seconds:
         ratio = sec / anchor_seconds
         if ratio > 2.2 or ratio < 0.4:
             score -= 1.0
 
-    # ---- don't hammer near-identical titles back to back ----
     last = _last_auto.get(chat_id)
     if last and SequenceMatcher(None, song_key(title), last).ratio() > 0.6:
         score -= 1.5
 
-    # ---- clean official upload bonus ----
     if re.search(r"\b(official|video song|lyrical|audio)\b", title, re.I):
         score += 0.4
+
+    # YouTube Mix order of the latest request = YouTube's own "similar songs"
+    pos = cand.get("mix_pos")
+    if pos is not None:
+        score += max(0.0, 3.0 - 0.2 * pos)
 
     return score
 
@@ -446,16 +449,13 @@ def rank_candidates(cands: list, chat_id: int) -> list:
 
 
 def weighted_pick(items: list) -> Optional[dict]:
-    """Pick among the best few: on-vibe but not repetitive."""
+    """Pick among songs that are almost as good as the best one."""
     if not items:
         return None
-    top = items[:_TOP_PICK]
-    best = top[0]["score"]
-    weights = [max(0.15, 1.0 - (best - it["score"]) * 0.25) for it in top]
-    return random.choices(top, weights=weights, k=1)[0]
-
-
-# =========================================================
+    best = items[0]["score"]
+    top = [it for it in items[:3] if it["score"] >= best - 1.0] or items[:1]
+    return random.choice(top)
+  # =========================================================
 # CANDIDATE SOURCES (network)
 # =========================================================
 def _cookie_file():
@@ -642,43 +642,34 @@ def _profile_queries(chat_id: int, seed_title: str) -> list:
 
 async def _build_pool(chat_id: int, seed_title: str, seed_vidid: str) -> list:
     anchors = _anchors.get(chat_id, [])
-
-    # Round-robin over human-picked songs so the vibe is a blend of everything
-    # requested, not only the newest request.
-    anchor_ids = [a["vidid"] for a in anchors if a.get("vidid")]
-    rr = _anchor_rr.get(chat_id, 0)
-    anchor_pick = anchor_ids[rr % len(anchor_ids)] if anchor_ids else None
-    _anchor_rr[chat_id] = rr + 1
-
-    sources = [_mix(seed_vidid)]
-    if anchor_pick and anchor_pick != seed_vidid:
-        sources.append(_mix(anchor_pick))
+    anchor_ids = [a["vidid"] for a in anchors if a.get("vidid") and _YT_ID.match(str(a["vidid"]))]
+    main_id = anchor_ids[-1] if anchor_ids else seed_vidid   # latest song a HUMAN asked for
 
     raw = []
-    for r in await asyncio.gather(*sources, return_exceptions=True):
-        if isinstance(r, list):
-            raw.extend(r)
+    if main_id:
+        for i, c in enumerate(await _mix(main_id)):
+            c["mix_pos"] = i
+            raw.append(c)
 
     ranked = rank_candidates(raw, chat_id)
-    good = [c for c in ranked if c["score"] > 0]
-
-    # Top up with profile search if the Mix gave too little on-vibe material.
-    if len(good) < 4:
+    if len(ranked) < 3:
+        # second Mix: the last autoplayed song (still checked against the request's vibe)
+        if seed_vidid and seed_vidid != main_id:
+            raw.extend(await _mix(seed_vidid))
+            ranked = rank_candidates(raw, chat_id)
+    if len(ranked) < 3:
         for q in _profile_queries(chat_id, seed_title):
             raw.extend(await _search(q))
             ranked = rank_candidates(raw, chat_id)
-            good = [c for c in ranked if c["score"] > 0]
-            if len(good) >= 6:
+            if len(ranked) >= 5:
                 break
-
-    # Prefer clearly on-vibe; if none, accept the least-bad so it never stalls.
-    return (good or ranked)[:_POOL_SIZE]
+    return ranked[:_POOL_SIZE]
 
 
 # =========================================================
 # PHONK INJECTION (every Nth autoplay song is a phonk track)
 # =========================================================
-PHONK_EVERY = int(os.getenv("PHONK_EVERY", "3"))   # 0 = off
+PHONK_EVERY = int(os.getenv("PHONK_EVERY", "0"))   # 0 = off (random phonk broke the vibe)
 _PHONK_QUERIES = [
     "phonk songs", "brazilian phonk", "drift phonk", "aggressive phonk",
     "funk phonk", "hindi phonk", "punjabi phonk", "gym phonk",
@@ -765,12 +756,7 @@ async def fetch_autoplay_track(chat_id: int, seed_title: str, seed_vidid: str = 
         items.sort(key=lambda x: x["score"], reverse=True)
 
     if not items:
-        # History swallowed every candidate: reset and retry once.
-        clear_history(chat_id)
-        items = await _build_pool(chat_id, seed_title, seed_vidid)
-
-    if not items:
-        return None
+        return None   # nothing on-vibe left -> stop instead of repeating / random
 
     pick = weighted_pick(items)
     _pool[chat_id] = {

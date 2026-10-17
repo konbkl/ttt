@@ -61,7 +61,7 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY")
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/konbkl/ttt",
+    "https://github.com/konbkl/Sizzuclone",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "main")
 GIT_TOKEN = getenv("GIT_TOKEN", "")
@@ -71,8 +71,8 @@ SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/betabot_support")
 GITHUB = getenv("GITHUB", "https://t.me/sukoon_s")
 
 # ----------------- MEOW STYLE UI -----------------
-# "Repo" button on the now-playing player
-REPO_URL = getenv("REPO_URL") or SUPPORT_CHANNEL
+# "Clone" button on the now-playing player (empty = opens the main bot)
+REPO_URL = getenv("REPO_URL", "")
 # premium emoji icons inside buttons (only works if the bot is allowed to use them)
 BUTTON_ICONS = getenv("BUTTON_ICONS", "False").lower() in ("true", "1", "yes", "on")
 # force users to join channel + group before /clone
